@@ -60,19 +60,51 @@ database point in time recovery enterprise,SYNTHETIC_B2B_Cloud_Backup,Disaster_R
 continuous audit readiness platform,SYNTHETIC_B2B_Security_Suite,SOC2_Automation,Phrase,510,36,79.20,6,1800.00
 cloud security risk register template excel,SYNTHETIC_B2B_Security_Suite,Security_Audit,Broad,1120,60,84.00,0,0.00`;
 
+export const TWO_CLICK_TRAP_CSV = `search_term,campaign,ad_group,match_type,impressions,clicks,cost,conversions,conversion_value
+cloud backup enterprise pricing,SYNTHETIC_B2B_Cloud_Backup,Enterprise_Backup_Core,Phrase,35,2,3.80,1,300.00
+enterprise backup compliance checklist,SYNTHETIC_B2B_Cloud_Backup,Enterprise_Backup_Core,Broad,210,15,27.00,1,300.00
+enterprise cloud backup software,SYNTHETIC_B2B_Cloud_Backup,Enterprise_Backup_Core,Phrase,920,65,117.00,14,4200.00
+managed database backup service,SYNTHETIC_B2B_Cloud_Backup,Enterprise_Backup_Core,Exact,910,70,126.00,4,1200.00
+cloud server backup solution,SYNTHETIC_B2B_Cloud_Backup,Enterprise_Backup_Core,Phrase,850,60,108.00,3,900.00
+legacy tape backup migration,SYNTHETIC_B2B_Cloud_Backup,Enterprise_Backup_Core,Phrase,60,4,8.00,6,1800.00
+free open source backup script tutorial,SYNTHETIC_B2B_Cloud_Backup,Cloud_Backup_Broad,Broad,2400,110,165.00,0,0.00`;
+
+export const COSTLY_WASTE_CSV = `search_term,campaign,ad_group,match_type,impressions,clicks,cost,conversions,conversion_value
+free open source backup script tutorial,SYNTHETIC_B2B_Cloud_Backup,Cloud_Backup_Broad,Broad,2400,110,165.00,0,0.00
+what is cloud computing definition pdf,SYNTHETIC_B2B_Cloud_Backup,Cloud_Backup_Broad,Broad,2100,95,142.50,0,0.00
+cheap student laptop jobs remote,SYNTHETIC_B2B_Security_Suite,Security_General,Broad,1890,85,127.50,0,0.00
+download crack cloud backup zip,SYNTHETIC_B2B_Cloud_Backup,Cloud_Backup_Broad,Broad,1560,94,141.00,0,0.00
+free aws credits promo code reddit,NA_Cloud_Core,Cloud_Backup_Broad,Broad,3100,142,213.00,0,0.00
+enterprise cloud backup software,SYNTHETIC_B2B_Cloud_Backup,Enterprise_Backup_Core,Phrase,920,65,117.00,14,4200.00
+automated soc2 compliance platform,SYNTHETIC_B2B_Security_Suite,SOC2_Automation,Exact,780,55,104.50,12,3600.00`;
+
 export const PRESET_DATASETS: DatasetPreset[] = [
   {
     id: 'enterprise_core',
-    name: 'Enterprise Paid Search Audit (50 Terms)',
-    description: 'Comprehensive enterprise dataset with multi-channel campaigns, high spend anomalies, and clear promotion candidates.',
+    name: 'Enterprise Audit (50 Terms)',
+    description: 'Comprehensive multi-campaign portfolio testing high-spend waste, winners, and baseline shrinkage.',
     csvContent: ENTERPRISE_AUDIT_CSV,
     rowCount: 50,
   },
   {
     id: 'synthetic_sample',
-    name: 'Synthetic Sample Benchmark (24 Terms)',
-    description: 'Official synthetic hackathon sample testing B2B cloud backup and SOC2 security campaigns.',
+    name: 'Synthetic Hackathon Sample (24 Terms)',
+    description: 'Official test benchmark covering B2B cloud backup and SOC2 security campaigns.',
     csvContent: SAMPLE_SYNTHETIC_CSV,
     rowCount: 24,
+  },
+  {
+    id: 'two_click_trap',
+    name: '2-Click Trap Defense (7 Terms)',
+    description: 'Validates that small-sample queries with 50% CVR (2 clicks, 1 conv) are guarded and NOT promoted.',
+    csvContent: TWO_CLICK_TRAP_CSV,
+    rowCount: 7,
+  },
+  {
+    id: 'costly_waste',
+    name: 'CPA Floor Waste Bleeders (7 Terms)',
+    description: 'Validates that high-spend queries exceeding account CPA with 0 conversions receive BLOCK recommendations.',
+    csvContent: COSTLY_WASTE_CSV,
+    rowCount: 7,
   },
 ];

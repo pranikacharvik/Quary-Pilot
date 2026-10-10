@@ -36,11 +36,45 @@ QueryPilot is a full-stack statistical search term triage engine and forensic in
 ```
 *(31 tests passed covering statistical formulas, edge cases, workflow anomalies, and API endpoints).*
 
+### Option D: Deploy to Vercel (Production Ready)
+
+QueryPilot is fully pre-configured for zero-friction Vercel deployment:
+- **Frontend SPA**: React 19 + TypeScript + Vite compiled to optimized static assets (`dist`).
+- **Backend API**: Python Serverless Function (`api/index.py`) serving the FastAPI triage endpoints (`/api/preview`, `/api/analyze`, `/api/export`, `/api/health`).
+- **Client Mirror Fallback**: `src/triageEngine.ts` automatically runs statistical calculations client-side if serverless cold-start or offline conditions occur.
+
+#### Method 1: Vercel Dashboard (Recommended)
+1. Push repository changes to GitHub.
+2. In the [Vercel Dashboard](https://vercel.com/new), click **Import Project** and select `MohamedKaish/QueryPilot`.
+3. Vercel automatically detects the preset settings from `vercel.json`:
+   - **Framework Preset**: `Vite`
+   - **Root Directory**: `./`
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
+4. Click **Deploy**.
+
+#### Method 2: Vercel CLI
+```bash
+# Preview deployment
+npx vercel
+
+# Production deployment
+npx vercel --prod
+```
+
 ---
 
 ## 2. Project Structure
 
 ```text
+api/index.py                # Vercel Serverless Function entrypoint (FastAPI)
+api/requirements.txt        # Serverless Python dependencies (FastAPI, SciPy, pandas, numpy)
+vercel.json                 # Vercel deployment routing (API serverless + Vite SPA rewrites)
+.vercelignore               # Vercel asset bundle exclusion rules
+server.py                   # FastAPI backend server with REST endpoints
+src/App.tsx                 # PlacementOS React triage application
+src/triageEngine.ts         # High-precision TypeScript client mirror of statistical engine
+src/demoDatasets.ts         # Benchmark datasets (4 real-world test cases)
 app.py                      # Streamlit UI (upload, schema mapping, quality report, thresholds, export)
 triage/__init__.py          # Package exports
 triage/init.py              # Compatibility alias
@@ -52,8 +86,10 @@ triage/export.py            # Deterministic filtering, sorting, and CSV serializ
 tests/test_stats.py         # Unit tests for Wilson interval, binomial tails, BH FDR, and shrinkage (9 tests)
 tests/test_engine.py        # Acceptance tests (2-click/1-conv trap, costly 0-conv block, winner, edge cases) (5 tests)
 tests/test_app_workflow.py  # End-to-end integration & workflow acceptance tests (12 tests)
+tests/test_api_integration.py # Integration tests for FastAPI endpoints (5 tests)
 data/sample_synthetic.csv   # Clearly labeled SYNTHETIC dataset covering all statistical & anomaly cases
-requirements.txt            # Python dependencies
+requirements.txt            # Production Python dependencies
+requirements-dev.txt        # Development dependencies (pytest, Streamlit)
 README.md                   # Documentation, methodology, and statistical/operational limitations
 ```
 

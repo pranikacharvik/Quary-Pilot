@@ -77,11 +77,13 @@ def _clean_for_json(obj: Any) -> Any:
 
 
 @app.get("/api/health")
+@app.get("/health")
 async def health_check():
     return {"status": "ok", "engine": "QueryPilot Triage Engine v1.0"}
 
 
 @app.post("/api/preview")
+@app.post("/preview")
 async def preview_csv(file: UploadFile = File(...)):
     """Preview CSV headers and suggest column mappings."""
     try:
@@ -104,6 +106,7 @@ async def preview_csv(file: UploadFile = File(...)):
 
 
 @app.post("/api/analyze")
+@app.post("/analyze")
 async def analyze_csv(
     file: UploadFile = File(...),
     column_mapping: str = Form(...),
@@ -192,6 +195,7 @@ async def analyze_csv(
 
 
 @app.post("/api/export")
+@app.post("/export")
 async def export_csv(
     results: str = Form(...),
     filters: Optional[str] = Form(None),
