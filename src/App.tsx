@@ -6,6 +6,13 @@ import {
   suggestColumnMapping,
   type TriageConfig as ClientTriageConfig,
 } from './triageEngine';
+import { ForensicDecisionInspector } from './ForensicDecisionInspector';
+import { ExecutiveDecisionBlueprint } from './ExecutiveDecisionBlueprint';
+import {
+  explainDecision,
+  generateNegativeKeywordsList,
+  generatePromotedKeywordsList,
+} from './decisionExplainer';
 
 /* ==========================================================================
    Type Definitions
@@ -226,6 +233,20 @@ export default function App() {
   // Forensic Detail Drawer & Copy State
   const [selectedRow, setSelectedRow] = useState<TriageResult | null>(null);
   const [copiedQuery, setCopiedQuery] = useState<string | null>(null);
+  const [batchCopiedNotice, setBatchCopiedNotice] = useState<string | null>(null);
+
+  const handleBatchCopy = useCallback((type: 'promote' | 'block') => {
+    if (type === 'promote') {
+      const text = generatePromotedKeywordsList(results as any);
+      navigator.clipboard.writeText(text);
+      setBatchCopiedNotice(`Copied ${results.filter(r => r.decision === 'PROMOTE').length} Exact Match keywords to clipboard!`);
+    } else {
+      const text = generateNegativeKeywordsList(results as any);
+      navigator.clipboard.writeText(text);
+      setBatchCopiedNotice(`Copied ${results.filter(r => r.decision === 'BLOCK').length} Negative keywords to clipboard!`);
+    }
+    setTimeout(() => setBatchCopiedNotice(null), 3000);
+  }, [results]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1524,6 +1545,30 @@ export default function App() {
                 </div>
               </div>
             </div>
+
+            {/* Executive Decision Blueprint: Methodology Rules + Top Highlights */}
+            <ExecutiveDecisionBlueprint
+              results={results as any}
+              summary={{
+                totalRows: summary.total_rows,
+                promoteCount: summary.promote_count,
+                blockCount: summary.block_count,
+                ignoreCount: summary.ignore_count,
+                reviewFlaggedCount: summary.review_flagged_count,
+                accountValidClicks: summary.account_valid_clicks,
+                accountValidConversions: summary.account_valid_conversions,
+                accountValidCost: summary.account_valid_cost,
+                accountBaselineCvr: summary.account_baseline_cvr,
+                accountCpa: summary.account_cpa,
+                effectiveBlockCostGate: summary.effective_block_cost_gate,
+              }}
+              effectiveBlockCostGate={summary.effective_block_cost_gate}
+              alpha={configSettings.alpha}
+              onInspectRow={term => {
+                setSelectedRow(term as any);
+                setActiveTab('data');
+              }}
+            />
           </div>
         )}
 
@@ -1617,13 +1662,33 @@ export default function App() {
               <span className="font-mono text-xs text-on-surface-variant font-semibold">
                 Showing {filteredResults.length} of {results.length} terms
               </span>
+
+              {/* Fast Batch Actions */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => handleBatchCopy('promote')}
+                  className="px-2.5 py-1.5 rounded bg-[#e6f7ef] hover:bg-emerald-100 text-tertiary font-mono text-xs font-bold flex items-center gap-1 border border-tertiary/30 transition-colors cursor-pointer shadow-2xs"
+                  title="Copy all promoted terms as [Exact Match] keywords for Google Ads"
+                >
+                  <span className="material-symbols-outlined text-[14px]">content_copy</span>
+                  Copy Promotes ({results.filter(r => r.decision === 'PROMOTE').length})
+                </button>
+                <button
+                  onClick={() => handleBatchCopy('block')}
+                  className="px-2.5 py-1.5 rounded bg-error-container hover:bg-rose-100 text-error font-mono text-xs font-bold flex items-center gap-1 border border-error/30 transition-colors cursor-pointer shadow-2xs"
+                  title="Copy all blocked terms as -[Negative Exact] keywords for Google Ads"
+                >
+                  <span className="material-symbols-outlined text-[14px]">content_copy</span>
+                  Copy Negatives ({results.filter(r => r.decision === 'BLOCK').length})
+                </button>
+              </div>
             </div>
 
             {/* Table & Forensic Detail Side Panel */}
-            <div className="flex gap-4">
+            <div className="flex flex-col lg:flex-row gap-4 items-start">
               <div
                 className={`bg-surface-container-lowest rounded-xl border border-outline-variant shadow-xs overflow-hidden transition-all ${
-                  selectedRow ? 'flex-1' : 'w-full'
+                  selectedRow ? 'w-full lg:flex-1' : 'w-full'
                 }`}
               >
                 <div className="overflow-auto max-h-[calc(100vh-270px)]">
@@ -1632,15 +1697,15 @@ export default function App() {
                       <tr className="border-b border-outline-variant/40">
                         {[
                           { key: 'row_id', label: '#', w: 'w-10 text-left' },
-                          { key: 'search_term', label: 'Search Query', w: 'min-w-[220px] text-left' },
-                          { key: 'campaign', label: 'Campaign', w: 'min-w-[130px] text-left' },
+                          { key: 'search_term', label: 'Search Query', w: 'min-w-[190px] text-left' },
+                          { key: 'campaign', label: 'Campaign', w: 'min-w-[120px] text-left' },
                           { key: 'clicks', label: 'Clicks', w: 'w-16 text-right' },
                           { key: 'cost', label: 'Spend', w: 'w-20 text-right' },
                           { key: 'conversions', label: 'Conv', w: 'w-16 text-right' },
                           { key: 'observed_cvr', label: 'Obs. CVR', w: 'w-20 text-right' },
                           { key: 'shrunk_baseline_cvr', label: 'Baseline', w: 'w-20 text-right' },
-                          { key: 'decision', label: 'Decision', w: 'w-24 text-left' },
-                          { key: 'confidence_tier', label: 'Confidence Tier', w: 'min-w-[120px] text-left' },
+                          { key: 'decision', label: 'Decision & Audit', w: 'min-w-[155px] text-left' },
+                          { key: 'reason', label: 'Decision Explanation & Why', w: 'min-w-[270px] text-left' },
                         ].map(col => (
                           <th
                             key={col.key}
@@ -1660,53 +1725,78 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredResults.map(row => (
-                        <tr
-                          key={row.row_id}
-                          onClick={() => setSelectedRow(row)}
-                          className={`border-b border-outline-variant/20 cursor-pointer transition-colors ${
-                            selectedRow?.row_id === row.row_id
-                              ? 'bg-primary-fixed/20 border-l-4 border-l-primary'
-                              : 'hover:bg-surface-container-low/60'
-                          } ${row.review_flag ? 'border-l-4 border-l-amber-500' : ''}`}
-                        >
-                          <td className="py-2.5 px-3.5 font-mono text-on-surface-variant">{row.row_id}</td>
-                          <td className="py-2.5 px-3.5 font-medium text-on-surface truncate max-w-[240px]" title={row.search_term}>
-                            {row.search_term}
-                          </td>
-                          <td className="py-2.5 px-3.5 font-mono text-[11px] text-on-surface-variant truncate max-w-[140px]" title={row.campaign}>
-                            {row.campaign}
-                          </td>
-                          <td className="py-2.5 px-3.5 font-mono text-right text-on-surface">{fmtInt(row.clicks)}</td>
-                          <td className="py-2.5 px-3.5 font-mono text-right text-on-surface">{fmtCurrency(row.cost)}</td>
-                          <td className="py-2.5 px-3.5 font-mono text-right text-on-surface">{fmt(row.conversions, 1)}</td>
-                          <td className="py-2.5 px-3.5 font-mono text-right">
-                            <span
-                              className={
-                                row.observed_cvr > row.shrunk_baseline_cvr
-                                  ? 'text-tertiary font-bold'
-                                  : row.observed_cvr < row.shrunk_baseline_cvr
-                                  ? 'text-error font-bold'
-                                  : 'text-on-surface-variant'
-                              }
-                            >
-                              {fmtPct(row.observed_cvr)}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3.5 font-mono text-right text-on-surface-variant">
-                            {fmtPct(row.shrunk_baseline_cvr)}
-                          </td>
-                          <td className="py-2.5 px-3.5">
-                            <DecisionBadge decision={row.decision} />
-                          </td>
-                          <td
-                            className="py-2.5 px-3.5 font-mono text-[11px] text-on-surface-variant truncate max-w-[130px]"
-                            title={row.confidence_tier}
+                      {filteredResults.map(row => {
+                        const expl = explainDecision(
+                          row as any,
+                          summary?.effective_block_cost_gate,
+                          configSettings.alpha,
+                          configSettings.min_test_clicks,
+                          configSettings.min_promote_conversions
+                        );
+
+                        return (
+                          <tr
+                            key={row.row_id}
+                            onClick={() => setSelectedRow(row)}
+                            className={`border-b border-outline-variant/20 cursor-pointer transition-colors ${
+                              selectedRow?.row_id === row.row_id
+                                ? 'bg-primary-fixed/20 border-l-4 border-l-primary'
+                                : 'hover:bg-surface-container-low/60'
+                            } ${row.review_flag ? 'border-l-4 border-l-amber-500' : ''}`}
                           >
-                            {row.confidence_tier.split(':')[0]}
-                          </td>
-                        </tr>
-                      ))}
+                            <td className="py-2.5 px-3.5 font-mono text-on-surface-variant">{row.row_id}</td>
+                            <td className="py-2.5 px-3.5 font-medium text-on-surface truncate max-w-[220px]" title={row.search_term}>
+                              {row.search_term}
+                            </td>
+                            <td className="py-2.5 px-3.5 font-mono text-[11px] text-on-surface-variant truncate max-w-[130px]" title={row.campaign}>
+                              {row.campaign}
+                            </td>
+                            <td className="py-2.5 px-3.5 font-mono text-right text-on-surface">{fmtInt(row.clicks)}</td>
+                            <td className="py-2.5 px-3.5 font-mono text-right text-on-surface">{fmtCurrency(row.cost)}</td>
+                            <td className="py-2.5 px-3.5 font-mono text-right text-on-surface">{fmt(row.conversions, 1)}</td>
+                            <td className="py-2.5 px-3.5 font-mono text-right">
+                              <span
+                                className={
+                                  row.observed_cvr > row.shrunk_baseline_cvr
+                                    ? 'text-tertiary font-bold'
+                                    : row.observed_cvr < row.shrunk_baseline_cvr
+                                    ? 'text-error font-bold'
+                                    : 'text-on-surface-variant'
+                                }
+                              >
+                                {fmtPct(row.observed_cvr)}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3.5 font-mono text-right text-on-surface-variant">
+                              {fmtPct(row.shrunk_baseline_cvr)}
+                            </td>
+                            <td className="py-2.5 px-3.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <DecisionBadge decision={row.decision} />
+                                <button
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    setSelectedRow(row);
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary font-mono text-[11px] font-semibold transition-colors cursor-pointer"
+                                  title="Inspect decision logic and explanation"
+                                >
+                                  <span className="material-symbols-outlined text-[13px]">psychology</span>
+                                  Explain
+                                </button>
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-3.5 font-mono text-[11px]">
+                              <div
+                                className="truncate max-w-[280px] text-on-surface/90"
+                                title={expl.shortSummary}
+                              >
+                                {expl.shortSummary}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                   {filteredResults.length === 0 && (
@@ -1719,106 +1809,15 @@ export default function App() {
 
               {/* Forensic Diagnostic Side Inspector */}
               {selectedRow && (
-                <div className="w-[410px] flex-shrink-0 bg-surface-container-lowest border border-outline-variant rounded-xl p-5 overflow-auto max-h-[calc(100vh-270px)] shadow-lg animate-[fadeIn_0.2s_ease-out]">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="min-w-0 pr-2">
-                      <h3 className="text-sm font-bold text-on-surface leading-tight break-words">
-                        {selectedRow.search_term}
-                      </h3>
-                      <p className="font-mono text-[11px] text-on-surface-variant mt-0.5">
-                        {selectedRow.campaign}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setSelectedRow(null)}
-                      className="text-on-surface-variant hover:text-on-surface cursor-pointer p-1"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">close</span>
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-2 mb-4">
-                    <DecisionBadge decision={selectedRow.decision} size="md" />
-                    {selectedRow.review_flag && (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                        FLAGGED FOR REVIEW
-                      </span>
-                    )}
-                    <button
-                      onClick={() => copyQuery(selectedRow.search_term)}
-                      className="ml-auto text-xs font-mono text-primary flex items-center gap-1 hover:underline cursor-pointer"
-                    >
-                      <span className="material-symbols-outlined text-[14px]">
-                        {copiedQuery === selectedRow.search_term ? 'check' : 'content_copy'}
-                      </span>
-                      {copiedQuery === selectedRow.search_term ? 'Copied' : 'Copy'}
-                    </button>
-                  </div>
-
-                  {/* 4 Metric Boxes */}
-                  <div className="grid grid-cols-2 gap-2 mb-4">
-                    <div className="bg-surface-container-low p-2.5 rounded-lg border border-outline-variant/30">
-                      <span className="font-mono text-[10px] text-on-surface-variant uppercase block">Clicks</span>
-                      <span className="font-mono text-sm font-bold text-on-surface">{fmtInt(selectedRow.clicks)}</span>
-                    </div>
-                    <div className="bg-surface-container-low p-2.5 rounded-lg border border-outline-variant/30">
-                      <span className="font-mono text-[10px] text-on-surface-variant uppercase block">Spend</span>
-                      <span className="font-mono text-sm font-bold text-on-surface">{fmtCurrency(selectedRow.cost)}</span>
-                    </div>
-                    <div className="bg-surface-container-low p-2.5 rounded-lg border border-outline-variant/30">
-                      <span className="font-mono text-[10px] text-on-surface-variant uppercase block">Conversions</span>
-                      <span className="font-mono text-sm font-bold text-on-surface">{fmt(selectedRow.conversions, 1)}</span>
-                    </div>
-                    <div className="bg-surface-container-low p-2.5 rounded-lg border border-outline-variant/30">
-                      <span className="font-mono text-[10px] text-on-surface-variant uppercase block">Observed CPA</span>
-                      <span className="font-mono text-sm font-bold text-on-surface">{fmtCurrency(selectedRow.observed_cpa)}</span>
-                    </div>
-                  </div>
-
-                  {/* Statistical Rigor Table */}
-                  <div className="mb-4">
-                    <span className="font-mono text-[10px] text-on-surface-variant uppercase tracking-wider font-bold block mb-2">
-                      Statistical Calibration Metrics
-                    </span>
-                    <div className="bg-surface-container-low p-3 rounded-lg border border-outline-variant/30 space-y-2 text-xs font-mono">
-                      <div className="flex justify-between">
-                        <span className="text-on-surface-variant">Observed CVR:</span>
-                        <span className="font-bold text-on-surface">{fmtPct(selectedRow.observed_cvr)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-on-surface-variant">Shrunk Baseline CVR:</span>
-                        <span className="text-on-surface">{fmtPct(selectedRow.shrunk_baseline_cvr)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-on-surface-variant">Wilson 95% CI:</span>
-                        <span className="text-on-surface">
-                          [{fmtPct(selectedRow.wilson_ci_lower)}, {fmtPct(selectedRow.wilson_ci_upper)}]
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-on-surface-variant">Exact Binomial p (lower):</span>
-                        <span className="text-on-surface">{selectedRow.p_value_lower?.toFixed(4) ?? '—'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-on-surface-variant">Exact Binomial p (upper):</span>
-                        <span className="text-on-surface">{selectedRow.p_value_upper?.toFixed(4) ?? '—'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-on-surface-variant">FDR q-value (upper):</span>
-                        <span className="text-on-surface">{selectedRow.q_value_upper?.toFixed(4) ?? '—'}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Classification Reason */}
-                  <div>
-                    <span className="font-mono text-[10px] text-on-surface-variant uppercase tracking-wider font-bold block mb-1">
-                      Deterministic Decision Rationale
-                    </span>
-                    <p className="bg-surface-container-low p-3 rounded-lg border border-outline-variant/30 text-xs font-mono text-on-surface leading-relaxed">
-                      {selectedRow.reason}
-                    </p>
-                  </div>
+                <div className="w-full lg:w-[480px] xl:w-[540px] flex-shrink-0 animate-[fadeIn_0.2s_ease-out]">
+                  <ForensicDecisionInspector
+                    row={selectedRow as any}
+                    effectiveBlockCostGate={summary?.effective_block_cost_gate}
+                    alpha={configSettings.alpha}
+                    minTestClicks={configSettings.min_test_clicks}
+                    minPromoteConv={configSettings.min_promote_conversions}
+                    onClose={() => setSelectedRow(null)}
+                  />
                 </div>
               )}
             </div>
@@ -2148,6 +2147,14 @@ export default function App() {
           <button onClick={() => setError(null)} className="cursor-pointer font-bold text-xs p-1">
             ✕
           </button>
+        </div>
+      )}
+
+      {/* Fast Batch Copy Notification Toast */}
+      {batchCopiedNotice && (
+        <div className="fixed bottom-5 left-5 z-50 p-3.5 px-5 bg-surface-container-high text-on-surface border border-primary/40 rounded-xl shadow-2xl flex items-center gap-2.5 font-mono text-xs animate-[slideUp_0.2s_ease-out]">
+          <span className="material-symbols-outlined text-primary text-[18px]">check_circle</span>
+          <span>{batchCopiedNotice}</span>
         </div>
       )}
     </div>
