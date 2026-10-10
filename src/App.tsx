@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { PRESET_DATASETS } from './demoDatasets';
 import {
   parseCsvFlexible,
@@ -86,6 +86,14 @@ interface CampaignSummaryItem {
   total_cost: number;
   total_clicks: number;
   total_conversions: number;
+}
+
+interface AnalysisResponse {
+  results: TriageResult[];
+  summary: TriageSummary;
+  quality_report: QualityReport;
+  decision_counts: Record<string, number>;
+  campaign_summary: CampaignSummaryItem[];
 }
 
 interface ConfigSettings {
@@ -221,18 +229,82 @@ export default function App() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Check backend health on load
+  useEffect(() => {
+    fetch('/api/health')
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (data && data.status === 'ok') {
+          setEngineSource('fastapi');
+        } else {
+          setEngineSource('client');
+        }
+      })
+      .catch(() => setEngineSource('client'));
+  }, []);
+
   /* ---- Execute Core Statistical Triage ---- */
   const executeTriage = useCallback(
-    (
+    async (
       csvText: string,
       targetCols: string[],
       targetMapping: ColumnMappingType,
       cfg: ConfigSettings
     ) => {
-      try {
-        setIsLoading(true);
-        setError(null);
+      setIsLoading(true);
+      setError(null);
 
+      // 1. Try FastAPI backend execution
+      try {
+        const formData = new FormData();
+        const blob = new Blob([csvText], { type: 'text/csv' });
+        formData.append('file', new File([blob], 'dataset.csv', { type: 'text/csv' }));
+        formData.append(
+          'column_mapping',
+          JSON.stringify({
+            search_term: targetMapping.search_term,
+            clicks: targetMapping.clicks,
+            cost: targetMapping.cost,
+            conversions: targetMapping.conversions,
+            campaign: targetMapping.campaign || null,
+            ad_group: targetMapping.ad_group || null,
+            match_type: targetMapping.match_type || null,
+            impressions: targetMapping.impressions || null,
+            conversion_value: targetMapping.conversion_value || null,
+          })
+        );
+        formData.append(
+          'config',
+          JSON.stringify({
+            alpha: cfg.alpha,
+            shrinkage_k: cfg.shrinkage_k,
+            min_test_clicks: cfg.min_test_clicks,
+            min_promote_conversions: cfg.min_promote_conversions,
+            block_cost_cpa_multiplier: cfg.block_cost_cpa_multiplier,
+            fallback_block_cost_floor: cfg.fallback_block_cost_floor,
+            strict_fdr_gate: cfg.strict_fdr_gate,
+          })
+        );
+
+        const resp = await fetch('/api/analyze', { method: 'POST', body: formData });
+        if (resp.ok) {
+          const data: AnalysisResponse = await resp.json();
+          setResults(data.results);
+          setSummary(data.summary);
+          setQualityReport(data.quality_report);
+          setCampaignSummary(data.campaign_summary);
+          setEngineSource('fastapi');
+          setCurrentScreen('dashboard');
+          setActiveTab('overview');
+          setIsLoading(false);
+          return;
+        }
+      } catch (backendErr) {
+        console.warn('FastAPI backend not reachable, using client engine mirror:', backendErr);
+      }
+
+      // 2. Client-side deterministic mirror fallback
+      try {
         const { headers: localHeaders, rows } = parseCsvFlexible(csvText);
         const effectiveHeaders = targetCols.length > 0 ? targetCols : localHeaders;
 
@@ -318,6 +390,7 @@ export default function App() {
         setSummary(clientSummary);
         setQualityReport(clientQuality);
         setCampaignSummary(Object.values(campMap));
+        setEngineSource('client');
         setCurrentScreen('dashboard');
         setActiveTab('overview');
       } catch (e: any) {
@@ -331,7 +404,7 @@ export default function App() {
 
   /* ---- Quick Launch Preset Helper ---- */
   const launchBenchmark = useCallback(
-    (presetId: string) => {
+    async (presetId: string) => {
       const preset = PRESET_DATASETS.find(p => p.id === presetId) || PRESET_DATASETS[0];
       const blob = new Blob([preset.csvContent], { type: 'text/csv' });
       const demoFile = new File([blob], `${preset.id}.csv`, { type: 'text/csv' });
@@ -358,7 +431,7 @@ export default function App() {
       setMapping(effectiveMapping);
       setSampleRows(rows.slice(0, 5));
 
-      executeTriage(preset.csvContent, headers, effectiveMapping, configSettings);
+      await executeTriage(preset.csvContent, headers, effectiveMapping, configSettings);
     },
     [executeTriage, configSettings]
   );
@@ -374,6 +447,26 @@ export default function App() {
       const text = await selectedFile.text();
       setRawCsvText(text);
 
+      // Try FastAPI preview first
+      try {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        const resp = await fetch('/api/preview', { method: 'POST', body: formData });
+        if (resp.ok) {
+          const data = await resp.json();
+          setColumns(data.columns);
+          setMapping(data.suggested_mapping);
+          setSampleRows(data.sample_rows);
+          setEngineSource('fastapi');
+          setCurrentScreen('mapping');
+          setIsLoading(false);
+          return;
+        }
+      } catch (previewErr) {
+        console.warn('FastAPI preview unavailable, using client parser:', previewErr);
+      }
+
+      // Local parser fallback
       const { headers, rows } = parseCsvFlexible(text);
       if (headers.length === 0) throw new Error('Uploaded CSV file appears to be empty.');
       const suggested = suggestColumnMapping(headers);
@@ -391,6 +484,7 @@ export default function App() {
         conversion_value: suggested.conversion_value || null,
       });
       setSampleRows(rows.slice(0, 5));
+      setEngineSource('client');
       setCurrentScreen('mapping');
     } catch (e: any) {
       setError(e.message || 'Failed to inspect dataset schema.');
@@ -453,13 +547,34 @@ export default function App() {
   const uniqueCampaigns = useMemo(() => [...new Set(results.map(r => r.campaign))], [results]);
 
   /* ---- Export Handler ---- */
-  const handleExport = useCallback(() => {
+  const handleExport = useCallback(async () => {
     try {
       if (filteredResults.length === 0) {
         setError('No rows available to export.');
         return;
       }
 
+      // 1. Try FastAPI backend export
+      try {
+        const formData = new FormData();
+        formData.append('results', JSON.stringify(filteredResults));
+
+        const resp = await fetch('/api/export', { method: 'POST', body: formData });
+        if (resp.ok) {
+          const blob = await resp.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `querypilot_triage_${datasetName.replace(/\s+/g, '_')}.csv`;
+          a.click();
+          URL.revokeObjectURL(url);
+          return;
+        }
+      } catch (backendErr) {
+        console.warn('Backend export unavailable, using client CSV generator:', backendErr);
+      }
+
+      // 2. Client-side CSV generation fallback
       const exportKeys: (keyof TriageResult)[] = [
         'row_id',
         'search_term',
