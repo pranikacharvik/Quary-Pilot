@@ -382,8 +382,8 @@ export function explainDecision(
       cpaGate: effectiveBlockCostGate,
       clicks: row.clicks,
       conversions: row.conversions,
-      pValue: row.decision === 'PROMOTE' ? pValUp : pValLow,
-      qValue: row.decision === 'PROMOTE' ? qValUp : qValLow,
+      pValue: row.observed_cvr >= row.shrunk_baseline_cvr ? pValUp : pValLow,
+      qValue: row.observed_cvr >= row.shrunk_baseline_cvr ? qValUp : qValLow,
     },
   };
 }
