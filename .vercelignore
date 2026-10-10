@@ -14,3 +14,7 @@ app.py
 .venv/
 venv/
 env/
+api/
+requirements*
+server.py
+triage/
