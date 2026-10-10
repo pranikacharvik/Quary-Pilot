@@ -462,6 +462,10 @@ export default function App() {
     setFile(selectedFile);
     setDatasetName(selectedFile.name.replace('.csv', ''));
     setError(null);
+    setResults([]);
+    setSummary(null);
+    setQualityReport(null);
+    setSelectedRow(null);
     setIsLoading(true);
 
     try {
@@ -628,7 +632,10 @@ export default function App() {
           .map(k => {
             const val = r[k];
             if (val === null || val === undefined) return '';
-            const str = String(val);
+            let str = String(val);
+            if (typeof val === 'string' && /^[=+\-@\t\r]/.test(str)) {
+              str = `'${str}`;
+            }
             return str.includes(',') || str.includes('"') || str.includes('\n')
               ? `"${str.replace(/"/g, '""')}"`
               : str;

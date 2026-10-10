@@ -40,6 +40,28 @@ EXPORT_COLUMNS: List[str] = [
 ]
 
 
+TEXT_EXPORT_COLUMNS: List[str] = [
+    "search_term",
+    "campaign",
+    "ad_group",
+    "match_type",
+    "quality_flags",
+    "reason",
+]
+
+
+def sanitize_for_csv_export(val: Any) -> Any:
+    """Mitigate CSV formula injection (CWE-1236) for user-controlled text fields.
+
+    Prepend a single quote to text fields starting with =, +, -, @, tab, or CR
+    so spreadsheet software (Excel, Calc) treats them as literal text.
+    """
+    if isinstance(val, str) and len(val) > 0:
+        if val[0] in ("=", "+", "-", "@", "\t", "\r"):
+            return f"'{val}"
+    return val
+
+
 def filter_and_sort_results(
     results_df: pd.DataFrame,
     decisions: Optional[List[str]] = None,
@@ -91,4 +113,7 @@ def results_to_csv_string(results_df: pd.DataFrame) -> str:
     """Serialize the triage DataFrame (full or filtered view) to a UTF-8 CSV string."""
     cols = [c for c in EXPORT_COLUMNS if c in results_df.columns]
     out_df = results_df[cols].copy()
+    for col in cols:
+        if col in TEXT_EXPORT_COLUMNS and col in out_df.columns:
+            out_df[col] = out_df[col].apply(sanitize_for_csv_export)
     return out_df.to_csv(index=False, lineterminator="\n")

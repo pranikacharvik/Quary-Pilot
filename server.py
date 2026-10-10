@@ -28,14 +28,49 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Allow CORS for the Vite dev server
+# Restrict CORS to development and Vercel preview environments
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.vercel\.app$",
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
+
+MAX_UPLOAD_SIZE_BYTES = 25 * 1024 * 1024  # 25 MB max upload limit
+
+
+async def _read_and_decode_upload(file: UploadFile) -> str:
+    """Safely read uploaded CSV with file-size limits and encoding fallback."""
+    content = await file.read(MAX_UPLOAD_SIZE_BYTES + 1)
+    if len(content) > MAX_UPLOAD_SIZE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="Uploaded file exceeds the maximum allowed limit of 25 MB.",
+        )
+    if len(content) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded CSV file is empty.",
+        )
+    try:
+        return content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        try:
+            return content.decode("latin-1")
+        except Exception as err:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unable to decode CSV file with UTF-8 or Latin-1: {err}",
+            )
 
 
 class NumpyEncoder(json.JSONEncoder):
@@ -87,8 +122,7 @@ async def health_check():
 async def preview_csv(file: UploadFile = File(...)):
     """Preview CSV headers and suggest column mappings."""
     try:
-        content = await file.read()
-        text = content.decode("utf-8-sig")
+        text = await _read_and_decode_upload(file)
         df = load_csv_flexible(io.StringIO(text))
 
         columns = list(df.columns)
@@ -101,6 +135,8 @@ async def preview_csv(file: UploadFile = File(...)):
             "sample_rows": sample_rows,
             "total_rows": len(df),
         })
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to parse CSV: {str(e)}")
 
@@ -121,8 +157,7 @@ async def analyze_csv(
     """
     try:
         # Parse inputs
-        content = await file.read()
-        text = content.decode("utf-8-sig")
+        text = await _read_and_decode_upload(file)
         df = load_csv_flexible(io.StringIO(text))
 
         mapping_dict = json.loads(column_mapping)
@@ -187,11 +222,13 @@ async def analyze_csv(
             "campaign_summary": _clean_for_json(campaign_summary),
         })
 
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal analysis error during statistical execution.")
 
 
 @app.post("/api/export")
