@@ -1,36 +1,40 @@
-# DevSprint PS-01: Search Term Triage Engine
+# QueryPilot — PS-01: Search Term Triage Engine
 
-A deterministic, local statistical triage application for paid search query reports (`Python 3.10+`, `Streamlit`, `pandas`, `SciPy`, `pytest`).
+QueryPilot is a full-stack statistical search term triage engine and forensic intelligence platform for paid search optimization. Built with a **React + TypeScript (Vite)** frontend styled in the **PlacementOS** enterprise design system, powered by a high-performance **FastAPI backend** and a rigorous deterministic Python statistical engine (`SciPy`, `numpy`, `pandas`).
 
 > **Dataset Status Notice:** The organizers' official CSV dataset has **not** been received or bundled in this repository. All sample outputs and pre-loaded examples in `data/sample_synthetic.csv` are explicitly labeled **`SYNTHETIC`** and are used strictly to test statistical edge cases. Do not treat synthetic sample results as official dataset claims.
 
 ---
 
-## 1. Quick Start (Beginner-Friendly Local Instructions)
+## 1. Quick Start
 
-### Prerequisites
-- Python 3.10 or newer
+### Option A: Modern Web Application (React + FastAPI) [Recommended]
 
-### Step 1: Create a virtual environment and install dependencies
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+1. **Install Backend Dependencies & Start FastAPI**:
+   ```powershell
+   python -m venv .venv
+   .\.venv\Scripts\pip.exe install -r requirements.txt fastapi uvicorn python-multipart httpx
+   .\.venv\Scripts\python.exe -m uvicorn server:app --host 0.0.0.0 --port 8000 --reload
+   ```
+
+2. **Install Frontend Dependencies & Start Vite**:
+   ```bash
+   npm install
+   npm run dev
+   ```
+
+3. Open **`http://localhost:3000`** in your browser. (FastAPI docs available at `http://127.0.0.1:8000/docs`).
+
+### Option B: Streamlit Standalone Interface
+```powershell
+.\.venv\Scripts\streamlit.exe run app.py
 ```
 
-### Step 2: Run the automated test suite (`pytest`)
-```bash
-# Windows PowerShell:
-.\.venv\Scripts\Activate.ps1
-pytest -v
-streamlit run app.py
-
-# macOS / Linux:
-source .venv/bin/activate
-pytest -v
-streamlit run app.py
+### Option C: Run Automated Tests
+```powershell
+.\.venv\Scripts\pytest.exe -v
 ```
-Then open the local URL printed in your terminal (typically `http://localhost:8501`), upload the official CSV when available (or select **SYNTHETIC Demo Dataset**), map columns if needed, inspect the data quality report, and download the triaged CSVs.
+*(31 tests passed covering statistical formulas, edge cases, workflow anomalies, and API endpoints).*
 
 ---
 
